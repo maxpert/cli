@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -21,12 +22,30 @@ var helpCommand = &Command{
 	Usage:     "Shows a list of commands or help for one command",
 	ArgsUsage: "[command]",
 	Action: func(cCtx *Context) error {
+		log.Printf("hc1")
+		if cCtx.Command.isRoot {
+			log.Printf("show app")
+			_ = ShowAppHelp(cCtx)
+			return nil
+		}
 		args := cCtx.Args()
 		if args.Present() {
+			if args.First() == "" {
+				log.Printf("hc2")
+				return ShowSubcommandHelp(cCtx)
+			}
+
+			log.Printf("hc3")
 			return ShowCommandHelp(cCtx, args.First())
 		}
 
-		_ = ShowAppHelp(cCtx)
+		if len(cCtx.Command.Subcommands) > 1 {
+			log.Printf("hc4")
+			_ = ShowSubcommandHelp(cCtx)
+		} else {
+			log.Printf("hc5")
+			_ = ShowCommandHelp(cCtx.parentContext, cCtx.Command.Name)
+		}
 		return nil
 	},
 }
@@ -38,11 +57,24 @@ var helpSubcommand = &Command{
 	ArgsUsage: "[command]",
 	Action: func(cCtx *Context) error {
 		args := cCtx.Args()
+		log.Printf("shc1")
 		if args.Present() {
+			if args.First() == "help" {
+				if a := args.Get(1); a == "" {
+					log.Printf("shc2")
+					return ShowSubcommandHelp(cCtx)
+				} else {
+					log.Printf("shc3")
+					return ShowCommandHelp(cCtx, a)
+				}
+			}
+			log.Printf("shc4")
 			return ShowCommandHelp(cCtx, args.First())
 		}
 
-		return ShowSubcommandHelp(cCtx)
+		log.Printf("shc5")
+		ShowSubcommandHelp(cCtx)
+		return nil
 	},
 }
 
@@ -204,17 +236,16 @@ func ShowCommandHelpAndExit(c *Context, command string, code int) {
 
 // ShowCommandHelp prints help for the given command
 func ShowCommandHelp(ctx *Context, command string) error {
-	// show the subcommand help for a command with subcommands
-	if command == "" {
-		HelpPrinter(ctx.App.Writer, SubcommandHelpTemplate, ctx.App)
-		return nil
+	commands := ctx.App.Commands
+	if ctx.Command != nil {
+		commands = ctx.Command.Subcommands
 	}
-
-	for _, c := range ctx.App.Commands {
+	for _, c := range commands {
 		if c.HasName(command) {
 			templ := c.CustomHelpTemplate
 			if templ == "" {
 				templ = CommandHelpTemplate
+				log.Printf("comhhhs")
 			}
 
 			HelpPrinter(ctx.App.Writer, templ, c)
@@ -226,7 +257,7 @@ func ShowCommandHelp(ctx *Context, command string) error {
 	if ctx.App.CommandNotFound == nil {
 		errMsg := fmt.Sprintf("No help topic for '%v'", command)
 		if ctx.App.Suggest {
-			if suggestion := SuggestCommand(ctx.App.Commands, command); suggestion != "" {
+			if suggestion := SuggestCommand(ctx.Command.Subcommands, command); suggestion != "" {
 				errMsg += ". " + suggestion
 			}
 		}
@@ -249,11 +280,8 @@ func ShowSubcommandHelp(cCtx *Context) error {
 		return nil
 	}
 
-	if cCtx.Command != nil {
-		return ShowCommandHelp(cCtx, cCtx.Command.Name)
-	}
-
-	return ShowCommandHelp(cCtx, "")
+	HelpPrinter(cCtx.App.Writer, SubcommandHelpTemplate, cCtx.Command)
+	return nil
 }
 
 // ShowVersion prints the version number of the App
@@ -354,8 +382,10 @@ func checkHelp(cCtx *Context) bool {
 	for _, name := range HelpFlag.Names() {
 		if cCtx.Bool(name) {
 			found = true
+			break
 		}
 	}
+
 	return found
 }
 

@@ -678,24 +678,6 @@ func TestApp_RunAsSubcommandParseFlags(t *testing.T) {
 	expect(t, cCtx.String("lang"), "spanish")
 }
 
-func TestApp_RunAsSubCommandIncorrectUsage(t *testing.T) {
-	a := App{
-		Name: "cmd",
-		Flags: []Flag{
-			&StringFlag{Name: "foo"},
-		},
-		Writer: bytes.NewBufferString(""),
-	}
-
-	set := flag.NewFlagSet("", flag.ContinueOnError)
-	_ = set.Parse([]string{"", "-bar"})
-	c := &Context{flagSet: set}
-
-	err := a.RunAsSubcommand(c)
-
-	expect(t, err.Error(), "flag provided but not defined: -bar")
-}
-
 func TestApp_CommandWithFlagBeforeTerminator(t *testing.T) {
 	var parsedOption string
 	var args Args
@@ -1511,6 +1493,9 @@ func TestRequiredFlagAppRunBehavior(t *testing.T) {
 				Subcommands: []*Command{{
 					Name:  "mySubCommand",
 					Flags: []Flag{&StringFlag{Name: "requiredFlag", Required: true}},
+					Action: func(c *Context) error {
+						return nil
+					},
 				}},
 			}},
 		},
@@ -1880,7 +1865,6 @@ func TestApp_Run_CommandHelpName(t *testing.T) {
 	}
 	cmd := &Command{
 		Name:        "foo",
-		HelpName:    "custom",
 		Description: "foo commands",
 		Subcommands: []*Command{subCmd},
 	}
@@ -2000,7 +1984,7 @@ func TestApp_Run_Help(t *testing.T) {
 			}
 
 			err := app.Run(tt.helpArguments)
-			if err != nil && err.Error() != tt.wantErr.Error() {
+			if err != nil && tt.wantErr != nil && err.Error() != tt.wantErr.Error() {
 				t.Errorf("want err: %s, did note %s\n", tt.wantErr, err)
 			}
 
